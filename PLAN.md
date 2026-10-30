@@ -30,12 +30,24 @@ Stack: TypeScript + Vite (no framework), one CSS file. Dependencies: `vite`, `ty
 
 ## Page (top to bottom)
 
-1. Title, big "N бюллетеней в урне" (real ballots only, with Russian plurals).
-2. Notice box: "Results are grouped by hand during the evening, about 2 hours behind the ballot box."
-3. Real results cards (topic, stacked bar, counts, ballot numbers) and the real feed.
-4. Dashed divider + "Пример" label, then the example rendered the same way, dimmed.
-5. Error box, if any.
+Framing: the protocol of the "Астральная избирательная комиссия, участок № 31". Ballots are
+collected by the Духом выборов with a portable ballot box (голосование вне помещения для
+голосования). The language is strictly formal; only the subject matter is otherworldly.
 
+1. Header: commission, precinct, title, "ПРОТОКОЛ об итогах волеизъявления", build time
+   ("Сведения по состоянию на …", in the visitor's timezone).
+2. Notice box (`>` lines): voting is conducted outside the polling station, about 2 h lag.
+3. Protocol lines with dotted leaders: number of ballots, number of questions.
+4. "Итоги волеизъявления по вопросам": a table per question (За / Против / Воздержались,
+   count, %), a thin bar and a violet stamp "Решение принято / не принято". It is accepted
+   when За is more than half of all votes, abstentions included.
+5. "Реестр бюллетеней": Бюллетень № · time · original text · За / Против / Воздержался(-ась).
+6. Signature lines (Председатель комиссии, Дух выборов) and a round violet seal, М.П.
+7. Dashed divider + "ОБРАЗЕЦ"; the example is rendered the same way over an "ОБРАЗЕЦ" watermark.
+8. Error box, if any.
+
+Style: off-white paper, PT Serif / PT Sans (Google Fonts), indigo accent, violet stamp ink,
+a faint moon-and-constellation watermark in the header, light theme only.
 All ballot text is rendered via `textContent`, never `innerHTML`.
 
 ## Files

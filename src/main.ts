@@ -11,12 +11,15 @@ type Ballot = {
   text: string
   topic?: Topic
 }
-type Topic = { name: string; ballots: Ballot[] }
+type Topic = { name: string; num: number; ballots: Ballot[] }
 type BadLine = { lineNo: number; line: string }
 type Part = { notes: string[]; ballots: Ballot[]; topics: Topic[] }
 
-const LABEL: Record<Position, string> = { for: 'ЗА', against: 'ПРОТИВ', abstain: 'ВОЗДЕРЖ.' }
-const COUNT_LABEL: Record<Position, string> = { for: 'за', against: 'против', abstain: 'возд.' }
+const VOTE: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержался(-ась)' }
+const TALLY: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержались' }
+const POSITION_ORDER = ['for', 'against', 'abstain'] as const
+
+declare const __BUILD_TIME__: string
 const FLIPPED: Record<Position, Position> = { for: 'against', against: 'for', abstain: 'abstain' }
 
 function parsePosition(s: string): Position | undefined {
@@ -57,7 +60,7 @@ function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
     const line = raw.trim()
     if (!line || line.startsWith('# ')) return
     if (line.startsWith('## ')) {
-      topic = { name: line.slice(3).trim(), ballots: [] }
+      topic = { name: line.slice(3).trim(), num: 0, ballots: [] }
       part.topics.push(topic)
     } else if (line.startsWith('>')) {
       part.notes.push(line.replace(/^>\s*/, ''))
@@ -75,6 +78,7 @@ function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
   part.topics = part.topics
     .filter((t) => t.ballots.length >= 2)
     .sort((x, y) => y.ballots.length - x.ballots.length)
+  part.topics.forEach((t, i) => (t.num = i + 1))
   return part
 }
 
@@ -100,71 +104,135 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node
 }
 
+// Static markup only; never used with ballot text.
+function svg(markup: string): HTMLElement {
+  const wrap = el('div')
+  wrap.innerHTML = markup
+  return wrap.firstElementChild as HTMLElement
+}
+
+const SEAL = `<svg class="seal" viewBox="0 0 120 120" aria-hidden="true">
+  <defs><path id="ring" d="M60,60 m-44,0 a44,44 0 1,1 88,0 a44,44 0 1,1 -88,0" /></defs>
+  <circle cx="60" cy="60" r="56" /><circle cx="60" cy="60" r="34" />
+  <text><textPath href="#ring" startOffset="0">АСТРАЛЬНАЯ ИЗБИРАТЕЛЬНАЯ КОМИССИЯ • УЧАСТОК № 31 •</textPath></text>
+  <text class="seal-mark" x="60" y="70" text-anchor="middle">☾✦</text>
+</svg>`
+
+const SKY = `<svg class="sky" viewBox="0 0 400 160" aria-hidden="true">
+  <path d="M330 30a42 42 0 1 0 38 62a34 34 0 1 1 -38 -62z" />
+  <g class="stars"><circle cx="40" cy="40" r="2.2"/><circle cx="85" cy="22" r="1.6"/><circle cx="120" cy="58" r="2"/>
+  <circle cx="170" cy="30" r="1.4"/><circle cx="215" cy="70" r="2.4"/><circle cx="260" cy="38" r="1.6"/></g>
+  <polyline points="40,40 85,22 120,58 170,30 215,70 260,38" />
+</svg>`
+
+const SPECIMEN = `<svg xmlns="http://www.w3.org/2000/svg" width="260" height="200"><text x="130" y="110" text-anchor="middle" transform="rotate(-30 130 100)" font-family="PT Serif, serif" font-size="40" font-weight="700" letter-spacing="6" fill="rgba(60,60,80,0.09)">ОБРАЗЕЦ</text></svg>`
+
 function ballotsWord(n: number): string {
   const form = new Intl.PluralRules('ru').select(n)
   return form === 'one' ? 'бюллетень' : form === 'few' ? 'бюллетеня' : 'бюллетеней'
 }
 
-function renderTopic(t: Topic): HTMLElement {
+function protocolLine(no: number, label: string, value: number): HTMLElement {
+  const li = el('li')
+  li.append(el('span', 'label', `${no}. ${label}`), el('span', 'dots'), el('strong', '', String(value)))
+  return li
+}
+
+function renderQuestion(t: Topic): HTMLElement {
   const counts: Record<Position, number> = { for: 0, against: 0, abstain: 0 }
   for (const b of t.ballots) counts[b.flip ? FLIPPED[b.position] : b.position]++
+  const total = t.ballots.length
 
-  const card = el('article', 'result')
-  card.append(el('h3', '', t.name))
+  const card = el('article', 'question')
+  const h = el('h3')
+  h.append(el('span', 'qnum', `Вопрос № ${t.num}.`), ` ${t.name}`)
+  card.append(h)
+
+  const table = el('table', 'tally')
+  for (const p of POSITION_ORDER) {
+    const row = el('tr', p)
+    row.append(
+      el('th', '', TALLY[p]),
+      el('td', '', String(counts[p])),
+      el('td', 'pct', `${Math.round((counts[p] / total) * 100)} %`),
+    )
+    table.append(row)
+  }
 
   const bar = el('div', 'bar')
   bar.setAttribute('aria-hidden', 'true')
-  for (const p of ['for', 'against', 'abstain'] as const) {
+  for (const p of POSITION_ORDER) {
     if (!counts[p]) continue
     const seg = el('span', p)
     seg.style.flexGrow = String(counts[p])
     bar.append(seg)
   }
 
-  const line = el('p', 'counts')
-  for (const p of ['for', 'against', 'abstain'] as const) {
-    line.append(el('span', p, `${counts[p]} ${COUNT_LABEL[p]}`))
-  }
+  // Accepted when "for" is more than half of all votes on the question, abstentions included.
+  const accepted = counts.for * 2 > total
+  const verdict = el('div', 'verdict')
+  verdict.append(el('span', 'stamp', accepted ? 'Решение принято' : 'Решение не принято'))
+  if (accepted) verdict.append(el('span', 'verdict-note', 'подлежит исполнению во всех планах бытия'))
 
   const nums = t.ballots.map((b) => b.n).sort((x, y) => x - y)
-  card.append(bar, line, el('p', 'refs', `Бюллетени № ${nums.join(', ')}`))
+  card.append(table, bar, verdict, el('p', 'refs', `Бюллетени № ${nums.join(', ')}`))
   return card
 }
 
 function renderBallot(b: Ballot): HTMLElement {
   const item = el('li', 'ballot')
   const meta = el('div', 'meta')
-  meta.append(el('span', 'num', `#${b.n} · ${b.time}`), el('span', `badge ${b.position}`, LABEL[b.position]))
+  meta.append(el('span', 'num', `Бюллетень № ${b.n}`), el('span', 'time', b.time), el('span', `vote ${b.position}`, VOTE[b.position]))
   item.append(meta, el('p', 'text', b.text))
-  // Only topics that made it into a results card get a tag.
-  if (b.topic && b.topic.ballots.length >= 2) {
-    const tag = b.flip ? `→ ${b.topic.name} (засчитан как «${COUNT_LABEL[FLIPPED[b.position]]}»)` : `→ ${b.topic.name}`
-    item.append(el('p', 'tag', tag))
+  // Only topics that made it into a question card get a reference.
+  if (b.topic && b.topic.num) {
+    const ref = b.flip
+      ? `→ Вопрос № ${b.topic.num} (учтён как «${TALLY[FLIPPED[b.position]]}»)`
+      : `→ Вопрос № ${b.topic.num}`
+    item.append(el('p', 'tag', ref))
   }
   return item
 }
 
 function renderPart(p: Part, emptyText: string): HTMLElement[] {
-  const out: HTMLElement[] = []
-  for (const note of p.notes) out.push(el('p', 'note', note))
+  const protocol = el('ol', 'protocol')
+  protocol.append(
+    protocolLine(1, 'Число бюллетеней, извлечённых из переносного ящика для голосования', p.ballots.length),
+    protocolLine(2, 'Число вопросов, по которым подведены итоги', p.topics.length),
+  )
+  const out: HTMLElement[] = [protocol]
 
   if (p.topics.length) {
-    const section = el('section', 'results')
-    section.append(el('h2', '', 'Итоги по темам'), ...p.topics.map(renderTopic))
+    const section = el('section', 'questions')
+    section.append(el('h2', '', 'Итоги волеизъявления по вопросам'), ...p.topics.map(renderQuestion))
     out.push(section)
   }
 
-  const feed = el('section', 'feed')
-  feed.append(el('h2', '', 'Все бюллетени'))
+  const registry = el('section', 'registry')
+  registry.append(el('h2', '', 'Реестр бюллетеней'))
   if (p.ballots.length) {
     const list = el('ol')
     list.append(...p.ballots.map(renderBallot))
-    feed.append(list)
+    registry.append(list)
   } else {
-    feed.append(el('p', 'empty', emptyText))
+    registry.append(el('p', 'empty', emptyText))
   }
-  out.push(feed)
+  out.push(registry)
   return out
+}
+
+function renderFooter(): HTMLElement {
+  const footer = el('footer', 'signatures')
+  const lines = el('div', 'sign-lines')
+  const chair = el('p')
+  chair.append(el('span', '', 'Председатель комиссии'), el('span', 'sign'))
+  const spirit = el('p')
+  spirit.append(el('span', '', 'Дух выборов'), el('span', 'sign'))
+  lines.append(chair, spirit, el('p', 'sign-note', '(подпись, при наличии телесной оболочки)'))
+  const seal = el('div', 'seal-box')
+  seal.append(el('span', 'mp', 'М.П.'), svg(SEAL))
+  footer.append(lines, seal)
+  return footer
 }
 
 function render() {
@@ -173,26 +241,40 @@ function render() {
   const app = document.getElementById('app')!
 
   const header = el('header')
-  header.append(el('h1', '', `🎃 ${title}`))
-  const total = el('p', 'total')
-  total.append(el('strong', '', String(real.ballots.length)), ` ${ballotsWord(real.ballots.length)} в урне`)
-  header.append(total)
-  app.append(header, ...renderPart(real, 'Урна пока пуста — первые бюллетени появятся по ходу вечера.'))
+  header.append(
+    svg(SKY),
+    el('p', 'commission', 'Астральная избирательная комиссия'),
+    el('p', 'precinct', 'Участок № 31 «Канун Дня всех святых»'),
+    el('h1', '', title),
+    el('p', 'doc-type', 'Протокол'),
+    el('p', 'doc-sub', 'об итогах волеизъявления'),
+  )
+  const asOf = new Date(__BUILD_TIME__).toLocaleString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  app.append(header, el('p', 'as-of', `Сведения по состоянию на ${asOf} (по земному времени)`))
+
+  for (const note of real.notes) app.append(el('p', 'note', note))
+  app.append(...renderPart(real, 'Переносной ящик для голосования пока пуст.'), renderFooter())
 
   if (example) {
-    const box = el('div', 'example')
     const divider = el('div', 'example-divider')
     divider.append(
-      el('span', 'example-label', 'Пример'),
-      el('p', '', 'Всё, что ниже, — пример оформления, а не настоящие голоса.'),
+      el('p', 'example-label', 'Образец'),
+      el('p', '', 'Данные не являются результатами волеизъявления и носят иллюстративный характер.'),
     )
-    box.append(...renderPart(example, 'Пример пуст.'))
+    const box = el('div', 'example')
+    box.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(SPECIMEN)}")`
+    box.append(...renderPart(example, 'Образец пуст.'))
     app.append(divider, box)
   }
 
   if (errors.length) {
     const box = el('section', 'errors')
-    box.append(el('h2', '', 'Не удалось прочитать строки'))
+    box.append(el('h2', '', 'Строки, не принятые к учёту (не поддаются прочтению)'))
     const list = el('ul')
     list.append(...errors.map((e) => el('li', '', `строка ${e.lineNo}: ${e.line}`)))
     box.append(list)
