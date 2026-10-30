@@ -98,3 +98,34 @@ h3 { font-size: 1.05rem; margin: 0 0 8px; }
 }
 .errors h2 { color: #f77; }
 .errors ul { margin: 0; padding-left: 18px; font-family: ui-monospace, monospace; font-size: 0.85rem; overflow-wrap: anywhere; }
+
+.refs { margin: 6px 0 0; font-size: 0.8rem; color: var(--muted); }
+.tag { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted); }
+
+.note {
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--for);
+  background: var(--card);
+  border-radius: 0 10px 10px 0;
+  font-size: 0.95rem;
+}
+
+.example-divider {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 2px dashed var(--muted);
+}
+.example-divider p { margin: 8px 0 0; color: var(--muted); }
+.example-label {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--bg);
+}
+.example { opacity: 0.7; }

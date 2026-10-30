@@ -1,26 +1,39 @@
-# 🎃 Halloween Referendum
+# 🎃 Хэллоуинский референдум
 
-Read-only results page for the party ballot box. All data lives in [`ballots.md`](ballots.md).
-Every push to `main` rebuilds the site on GitHub Pages (~1 min).
+Read-only results page (in Russian) for the party ballot box. All data lives in
+[`ballots.md`](ballots.md). Every push to `main` rebuilds the site on GitHub Pages (~1 min).
 
-## Adding ballots
+## `ballots.md` format
 
-One ballot per line under `## Ballots`:
+```md
+# Page title
 
+> Notice shown in a highlighted box (any number of `>` lines).
+
+21:40 | за | A ballot that belongs to no topic
+
+## Topic name, in your own words
+21:04 | за | Ballot text, verbatim
+22:30 | !за | A ballot whose meaning is the opposite of the topic's
+
+---
+
+(everything below this line is shown as an example, under a dashed divider)
 ```
-21:04 | for | Ban candy corn forever
-against | the DJ should play Monster Mash again
-```
 
-- `time |` is optional (`HH:mm`).
-- Position: `for`, `against`, `abstain` (or `+`, `-`, `0`).
-- Text is kept verbatim, `|` included.
-- The feed shows ballots in file order, numbered `#1, #2…`.
-
-Results go under `## Results` as `topic | for | against | abstain`, counted by hand.
-The `# ` heading is the page title.
-
-Lines that can't be read show up in a red box at the bottom of the page.
+- **Ballot line:** `HH:mm | position | text`.
+  - Time is required: it orders the feed. Times `00:00`–`11:59` count as after midnight.
+  - Position is `за`, `против` or `возд` (also `for`, `against`, `abstain` or `+`, `-`, `0`).
+  - Text is kept verbatim, `|` included.
+- **Topics:** a `## Heading` groups the ballots under it. Ballots above the first heading
+  belong to no topic. A topic with 2 or more ballots gets a results card, with counts computed
+  automatically. Single-ballot topics show up only in the feed.
+- **`!` before the position** flips it for the topic's count (for ↔ against). The feed still
+  shows the guest's original position.
+- **Feed numbering** (`#1, #2…`) follows time order, not file order.
+- **`---`** separates real data (above) from example data (below). Delete the example part
+  whenever you like.
+- Lines that can't be read show up in a red box at the bottom of the page.
 
 ## Running locally
 
