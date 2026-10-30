@@ -1,158 +1,112 @@
 # Vote 2026 — Development Plan
 
-A read-only, mobile-first results site for the Halloween party ballot box.
-Guests vote on paper; the organizer types ballots in; visitors watch the feed.
+A tiny, read-only, mobile-first results page for the Halloween party ballot box.
+Guests vote on paper; the organizer types everything into one Markdown file once;
+the page is published to GitHub Pages. A one-off for fun, built to match.
 
-## 1. Architecture (the whole thing)
+## 1. Architecture
 
 ```
-data/ballots.json ──(git push / GitHub web editor)──▶ GitHub Actions
-                                                          │ validate + build
-                                                          ▼
-                                       GitHub Pages: index.html + app.js + data.json
-                                                          ▲
-                              browser polls data.json every 30 s
+ballots.md ──(import ?raw)──▶ src/main.ts parses it ──▶ vite build ──▶ GitHub Pages
 ```
 
-- **No server, no database, no admin UI.** The data is one JSON file in this repo.
-- **Data entry** = edit `data/ballots.json` (locally, or on a phone via github.com's
-  file editor) and commit. A deploy takes ~1 minute.
-- **Updates** = the page re-fetches `data.json` every 30 s (cache-busted) and re-renders.
-- **Safety net** = the build validates the JSON; a malformed edit fails CI and the
-  last good version stays live.
-
-Why this over a backend with an admin form: zero hosting, zero auth to build, free,
-and the git history doubles as an audit log of every entry. The cost is a ~1 min
-publish delay and hand-editing JSON — acceptable for one evening and one editor.
+- **No server, no database, no admin UI, no polling.** The page is static.
+- **Data entry** = write `ballots.md`, one ballot per line, then push to `main`.
+- Vite inlines the Markdown into the JS bundle (`import md from '../ballots.md?raw'`),
+  so the parse code runs in the browser and there is no separate conversion script or JSON file.
+- **Checking it** = `npm run dev` and look at the page before pushing. Lines that
+  don't parse show up in a red "couldn't read these lines" box at the bottom of the page,
+  so mistakes are visible right away.
 
 ## 2. Stack
 
-| Concern  | Choice                                   |
-|----------|------------------------------------------|
-| Language | TypeScript (strict)                      |
-| Build    | Vite (vanilla-ts template), no framework |
-| Styling  | One hand-written CSS file                |
-| Hosting  | GitHub Pages via GitHub Actions          |
-| Tests    | None beyond the data validator + `tsc`   |
-
+TypeScript + Vite (vanilla-ts template), one CSS file, GitHub Pages via Actions.
 Dependencies: `vite`, `typescript`. Nothing else.
 
-## 3. Data format
+## 3. Data format — `ballots.md`
 
-`data/ballots.json` — the single source of truth:
+```md
+# Halloween 2026 Referendum
 
-```json
-{
-  "title": "Halloween 2026 Referendum",
-  "ballots": [
-    { "id": 1, "at": "2026-10-31T21:04", "text": "Ban candy corn forever", "vote": "for" },
-    { "id": 2, "at": "2026-10-31T21:06", "text": "the DJ should play Monster Mash again", "vote": "against" }
-  ],
-  "results": [
-    { "topic": "Candy corn", "for": 7, "against": 2, "abstain": 1, "note": "ballots 1, 4, 9…" }
-  ]
-}
+## Ballots
+
+21:04 | for | Ban candy corn forever
+21:06 | against | the DJ should play Monster Mash again
+21:10 | abstain | Should Dave be allowed back
+for | Pizza at midnight
+
+## Results
+
+Candy corn | 7 | 2 | 1
+Monster Mash | 3 | 5 | 0
 ```
 
-- `id` — sequential integer, unique. Lets results reference ballots and keeps order stable.
-- `at` — local time the ballot was cast/collected (`YYYY-MM-DDTHH:mm`), entered by hand.
-  Displayed as-is (e.g. "21:04"); no timezone conversion.
-- `text` — original wording, verbatim. Rendered with `textContent` (never as HTML).
-- `vote` — `"for" | "against" | "abstain"`.
-- `results` — fully manual aggregation. Counts are typed in, not computed, because grouping
-  free-form text is the organizer's judgement call. `note` is optional.
-
-Total ballot count = `ballots.length` (computed, never typed).
+Rules:
+- `# …` sets the page title.
+- `## Ballots` / `## Results` switch sections. Blank lines are ignored.
+- **Ballot line:** `[time |] position | text`
+  - `time` (optional): `HH:mm` as written or estimated. Omit it and the ballot just has no time.
+  - `position`: `for`, `against` or `abstain` (case-insensitive; `+`, `-` and `0` work as shorthands).
+  - `text`: everything after the separator, kept verbatim, even if it contains `|`.
+  - Order in the file = order of the feed (chronological). Ballot numbers `#1, #2…` come from line order.
+- **Result line:** `topic | for | against | abstain`, with the counts typed by hand
+  (grouping is the organizer's call, not computed).
+- Total ballots = number of valid ballot lines (computed).
 
 ## 4. File layout
 
 ```
-index.html               # shell: header, total, results, feed
-src/main.ts              # fetch + render + poll (~120 lines)
-src/types.ts             # Ballot, Result, Data types
-src/style.css            # mobile-first styles, dark Halloween palette
-data/ballots.json        # the data (edited by hand)
-scripts/validate.ts      # checks data/ballots.json; copies it to public/data.json
-.github/workflows/deploy.yml
+ballots.md               # the data
+index.html               # shell
+src/main.ts              # parse + render (~120 lines)
+src/style.css            # mobile-first, dark Halloween palette
 vite.config.ts           # base: '/vote-2026/'
+.github/workflows/deploy.yml
 package.json, tsconfig.json, README.md
 ```
 
-## 5. Page design (single page, top to bottom)
+## 5. Parsing (`parse(md: string)` in `src/main.ts`)
 
-1. **Header** — title + "N ballots cast" (large number) + "updated 21:14" stamp.
-2. **Results** — one card per `results` entry: topic, a horizontal stacked bar
-   (for / against / abstain), and the three counts. Hidden if `results` is empty.
-3. **Feed** — every ballot, **newest first**, as a compact row:
-   `#12 · 21:06` · position badge (FOR / AGAINST / ABSTAIN) · the text.
+Line-by-line loop with a `section` variable:
+- `# x` → title; `## x` → section = lowercased x; blank → skip.
+- In `ballots`: split on `|`, trim. If the first part matches `/^\d{1,2}:\d{2}$/`, it's the time.
+  The next part must be a valid position, and the text is the rest joined back with `|`.
+- In `results`: the last three parts must be non-negative integers; the topic is the rest.
+- Anything else → push `{ lineNo, line }` to `errors`.
 
-Mobile-first: single column, ~16 px gutters, max-width ~640 px centred on desktop.
-Position is conveyed by label text, not colour alone. System font stack, no web fonts.
-Long unbroken text wraps (`overflow-wrap: anywhere`).
+Returns `{ title, ballots, results, errors }`.
 
-## 6. Client behaviour (`src/main.ts`)
+## 6. Page (single column, top to bottom)
 
-- `load()` → `fetch('data.json?t=' + Date.now(), { cache: 'no-store' })` → validate shape
-  loosely → `render(data)`.
-- `setInterval(load, 30_000)`; also reload on `visibilitychange` when the tab becomes visible.
-- Skip re-render if the response text is identical to the last one (avoids scroll jumps).
-- On fetch error: keep showing the last good data, show a small "offline — retrying" note.
-- Render by building DOM nodes with `textContent`; no `innerHTML` with user text.
+1. **Header** — title + big "N ballots cast".
+2. **Results** — a card per topic: name, a for/against/abstain stacked bar, and the counts.
+   Hidden if there are no results.
+3. **Feed** — all ballots in file order: `#12 · 21:06` · FOR/AGAINST/ABSTAIN badge · text.
+4. **Errors box** — only if some lines didn't parse (useful in dev, harmless in prod).
 
-## 7. Validation script (`scripts/validate.ts`)
+Mobile-first: ~16px gutters, max-width ~640px centred on desktop, system fonts,
+`overflow-wrap: anywhere` for long text. Position is shown as a text label, not just colour.
+All ballot text is rendered via `textContent`, never `innerHTML`.
 
-Run with `node --experimental-strip-types` (Node ≥ 22.6) or `tsx`; called by `npm run build`.
+## 7. Deployment
 
-Fails the build if:
-- JSON doesn't parse;
-- a ballot is missing a field, has an unknown `vote`, empty `text`, or a malformed `at`;
-- `id`s are duplicated;
-- a result has non-integer / negative counts.
+`.github/workflows/deploy.yml` on push to `main`:
+`checkout → setup-node → npm ci → npm run build → upload-pages-artifact(dist) → deploy-pages`.
+One-time setting: **Settings → Pages → Source: GitHub Actions** (the repo must be public on a free plan).
 
-Warns (doesn't fail) if a result's counts sum to more than the total ballots.
-On success, writes `public/data.json` so Vite ships it at the site root.
-
-## 8. Deployment
-
-`.github/workflows/deploy.yml`, on push to `main`:
-`checkout → setup-node 22 → npm ci → npm run build → upload-pages-artifact(dist) → deploy-pages`.
-
-One-time repo setting: **Settings → Pages → Source: GitHub Actions.**
-Note: GitHub Pages on a private repo needs a paid plan; make the repo public or use
-Cloudflare Pages / Netlify with the same build command.
-
-## 9. Build order (est. 3–4 hours total)
+## 8. Build order (~2 hours)
 
 | # | Task | Done when |
 |---|------|-----------|
-| 1 | Scaffold Vite vanilla-ts, strip boilerplate, add `types.ts` | `npm run dev` shows a blank page |
-| 2 | Write `data/ballots.json` with ~10 sample ballots + 2 results | file exists |
-| 3 | `validate.ts` + wire into `build` script | bad JSON fails `npm run build` |
-| 4 | `main.ts`: fetch + render header/total and feed | feed shows samples, newest first |
-| 5 | Results cards with stacked bars | cards render; hidden when empty |
-| 6 | Polling, visibility reload, no-op on unchanged data, error note | editing the JSON in dev updates page within 30 s |
-| 7 | CSS pass on a 375 px viewport, then desktop | readable on phone, no horizontal scroll |
-| 8 | Deploy workflow + enable Pages | public URL live |
-| 9 | Clear sample data, set real title, smoke-test an edit from a phone | edit → live in ~1 min |
-| 10 | README: "how to add a ballot" in 5 lines | done |
+| 1 | Scaffold Vite vanilla-ts, strip boilerplate, add sample `ballots.md` | `npm run dev` runs |
+| 2 | `parse()` + header/total + feed | sample ballots render in order |
+| 3 | Result cards + errors box | bad lines show up in red |
+| 4 | CSS pass at 375px, then desktop | readable on a phone, no horizontal scroll |
+| 5 | Workflow + enable Pages | public URL live with sample data |
+| 6 | README: the format rules from §3 | done |
+| 7 | After the party: replace the sample with real ballots, check in dev, push | 🎃 |
 
-## 10. Party-night workflow
+## 9. Out of scope
 
-1. Collect a batch of ballots from the box.
-2. Open `data/ballots.json` on github.com (pencil icon), append entries with the next `id`s.
-3. Commit directly to `main`. Check the Actions tab goes green (~1 min).
-4. Every so often, update `results` counts as themes emerge.
-5. Show the site on a TV/projector — it refreshes itself.
-
-Tip: batch entries (every 10–15 ballots) rather than one commit per ballot.
-
-## 11. Explicitly out of scope
-
-Public submission, accounts, auth, admin UI, database, comments/reactions, sharing,
-analytics, automatic grouping/NLP, websockets/live push, i18n, edit history UI, tests
-beyond validation.
-
-## 12. If the 1-minute delay turns out to be annoying (only then)
-
-Swap the data source for a published Google Sheet CSV (or a Gist raw URL) fetched
-directly by the client; the render code stays the same — only `load()` changes.
+Live updates/polling, public submission, accounts, auth, admin UI, database,
+comments/reactions, analytics, automatic grouping, tests.
