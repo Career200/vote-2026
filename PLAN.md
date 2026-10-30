@@ -88,6 +88,12 @@ Mobile-first: ~16px gutters, max-width ~640px centred on desktop, system fonts,
 `overflow-wrap: anywhere` for long text. Position is shown as a text label, not just colour.
 All ballot text is rendered via `textContent`, never `innerHTML`.
 
+**TV mode:** opening the page with `?tv` makes it reload every 60 s (the equivalent of
+`<meta http-equiv="refresh" content="60">`, but only for the wall screen, so phones
+don't reload while someone is scrolling).
+
+**Party-time entry:** `CLAUDE.md` tells an agent how to append ballots and push.
+
 ## 7. Deployment
 
 `.github/workflows/deploy.yml` on push to `main`:
@@ -108,5 +114,5 @@ One-time setting: **Settings → Pages → Source: GitHub Actions** (the repo mu
 
 ## 9. Out of scope
 
-Live updates/polling, public submission, accounts, auth, admin UI, database,
+Live updates/polling (beyond TV mode), public submission, accounts, auth, admin UI, database,
 comments/reactions, analytics, automatic grouping, tests.

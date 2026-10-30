@@ -1,0 +1,100 @@
+:root {
+  --bg: #120d16;
+  --card: #1e1624;
+  --line: #34283d;
+  --text: #f3ece6;
+  --muted: #a99bb0;
+  --for: #ff8a1f;
+  --against: #9d6bff;
+  --abstain: #7d8a87;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; }
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+h1 { font-size: 1.6rem; margin: 0 0 4px; line-height: 1.2; }
+h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin: 32px 0 12px;
+}
+h3 { font-size: 1.05rem; margin: 0 0 8px; }
+
+.total { margin: 0; color: var(--muted); }
+.total strong { font-size: 2.6rem; color: var(--for); margin-right: 6px; vertical-align: -0.1em; }
+
+.result {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.bar span { flex-basis: 0; }
+.bar .for { background: var(--for); }
+.bar .against { background: var(--against); }
+.bar .abstain { background: var(--abstain); }
+
+.counts { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.9rem; }
+.counts .for { color: var(--for); }
+.counts .against { color: var(--against); }
+.counts .abstain { color: var(--muted); }
+
+.feed ol { list-style: none; margin: 0; padding: 0; }
+
+.ballot {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+.ballot:last-child { border-bottom: 0; }
+
+.meta { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.num { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.badge.for { color: var(--for); }
+.badge.against { color: var(--against); }
+.badge.abstain { color: var(--abstain); }
+
+.text { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.empty { color: var(--muted); }
+
+.errors {
+  margin-top: 32px;
+  border: 1px solid #c33;
+  border-radius: 12px;
+  padding: 4px 16px 12px;
+  background: #2a1214;
+}
+.errors h2 { color: #f77; }
+.errors ul { margin: 0; padding-left: 18px; font-family: ui-monospace, monospace; font-size: 0.85rem; overflow-wrap: anywhere; }
