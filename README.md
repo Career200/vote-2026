@@ -49,3 +49,8 @@ Open the page with `?tv` (e.g. `…/vote-2026/?tv`) and it reloads every minute.
 ## One-time setup
 
 Repo **Settings → Pages → Source: GitHub Actions**.
+
+## Ballot box front page
+
+`print/ballot-box.pdf` (A4) is rendered from `print/box.html` with headless Chromium
+(Playwright `page.pdf()`). The QR code in `src/qr.svg` points at the site and is static, so it never expires.

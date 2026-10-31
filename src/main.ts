@@ -1,4 +1,5 @@
 import md from '../ballots.md?raw'
+import qr from './qr.svg?raw'
 import './style.css'
 
 type Position = 'for' | 'against' | 'abstain'
@@ -235,6 +236,14 @@ function renderFooter(): HTMLElement {
   return footer
 }
 
+function renderQr(): HTMLElement {
+  const box = el('div', 'qr')
+  const caption = el('p', 'qr-caption', 'Адрес публикации итогов')
+  caption.append(el('small', '', 'career200.github.io/vote-2026'))
+  box.append(svg(qr), caption)
+  return box
+}
+
 function render() {
   const { title, real, example, errors } = parse(md)
   document.title = title
@@ -258,7 +267,7 @@ function render() {
   app.append(header, el('p', 'as-of', `Сведения по состоянию на ${asOf} (по земному времени)`))
 
   for (const note of real.notes) app.append(el('p', 'note', note))
-  app.append(...renderPart(real, 'Переносной ящик для голосования пока пуст.'), renderFooter())
+  app.append(...renderPart(real, 'Переносной ящик для голосования пока пуст.'), renderFooter(), renderQr())
 
   if (example) {
     const divider = el('div', 'example-divider')

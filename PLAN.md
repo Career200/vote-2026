@@ -59,6 +59,8 @@ vite.config.ts           # base: '/vote-2026/'
 .github/workflows/deploy.yml
 README.md                # format rules
 CLAUDE.md                # how an agent adds ballots during the party
+src/qr.svg               # static QR code of the site URL (also shown on the page)
+print/box.html           # A4 front page for the ballot box, source of print/ballot-box.pdf
 ```
 
 ## Out of scope
