@@ -8,7 +8,8 @@ Read-only results page (in Russian) for the party ballot box. All data lives in
 ```md
 # Page title
 
-> Notice shown in a highlighted box (any number of `>` lines).
+> Notice shown in an «Информационное сообщение» box (any number of `>` lines).
+> ! A line starting with `!` becomes a violet stamp under the notice.
 
 21:40 | за | A ballot that belongs to no topic
 

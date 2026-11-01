@@ -236,6 +236,19 @@ function renderFooter(): HTMLElement {
   return footer
 }
 
+// "> text" lines form the notice; a "> ! text" line becomes a stamp under it.
+function renderNotice(notes: string[]): HTMLElement {
+  const box = el('section', 'notice')
+  box.append(el('p', 'notice-title', 'Информационное сообщение'))
+  const stamps = el('div', 'notice-stamps')
+  for (const note of notes) {
+    if (note.startsWith('!')) stamps.append(el('span', 'stamp', note.slice(1).trim()))
+    else box.append(el('p', '', note))
+  }
+  if (stamps.childElementCount) box.append(stamps)
+  return box
+}
+
 function renderQr(): HTMLElement {
   const box = el('div', 'qr')
   const caption = el('p', 'qr-caption', 'Адрес публикации итогов')
@@ -266,7 +279,7 @@ function render() {
   })
   app.append(header, el('p', 'as-of', `Сведения по состоянию на ${asOf} (по земному времени)`))
 
-  for (const note of real.notes) app.append(el('p', 'note', note))
+  if (real.notes.length) app.append(renderNotice(real.notes))
   app.append(...renderPart(real, 'Переносной ящик для голосования пока пуст.'), renderFooter(), renderQr())
 
   if (example) {
