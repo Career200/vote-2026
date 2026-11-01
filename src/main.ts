@@ -14,7 +14,7 @@ type Ballot = {
 }
 type Topic = { name: string; num: number; ballots: Ballot[] }
 type BadLine = { lineNo: number; line: string }
-type Part = { notes: string[]; ballots: Ballot[]; topics: Topic[] }
+type Part = { notes: string[]; spoiled: number; ballots: Ballot[]; topics: Topic[] }
 
 const VOTE: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержался(-ась)' }
 const TALLY: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержались' }
@@ -54,7 +54,7 @@ function parseBallot(line: string): Ballot | null {
 }
 
 function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
-  const part: Part = { notes: [], ballots: [], topics: [] }
+  const part: Part = { notes: [], spoiled: 0, ballots: [], topics: [] }
   let topic: Topic | undefined
 
   lines.forEach((raw, i) => {
@@ -63,6 +63,11 @@ function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
     if (line.startsWith('## ')) {
       topic = { name: line.slice(3).trim(), num: 0, ballots: [] }
       part.topics.push(topic)
+    } else if (/^испорченн/i.test(line)) {
+      // "Испорченные бюллетени: 4"
+      const count = line.match(/[:|]\s*(\d+)$/)
+      if (!count) return errors.push({ lineNo: offset + i + 1, line })
+      part.spoiled = Number(count[1])
     } else if (line.startsWith('>')) {
       part.notes.push(line.replace(/^>\s*/, ''))
     } else {
@@ -199,8 +204,9 @@ function renderPart(p: Part, emptyText: string): HTMLElement[] {
   const protocol = el('ol', 'protocol')
   protocol.append(
     protocolLine(1, 'Число бюллетеней, извлечённых из переносного ящика для голосования', p.ballots.length),
-    protocolLine(2, 'Число вопросов, по которым подведены итоги', p.topics.length),
   )
+  if (p.spoiled) protocol.append(protocolLine(2, 'Число испорченных бюллетеней', p.spoiled))
+  protocol.append(protocolLine(p.spoiled ? 3 : 2, 'Число вопросов, по которым подведены итоги', p.topics.length))
   const out: HTMLElement[] = [protocol]
 
   if (p.topics.length) {

@@ -32,6 +32,7 @@ Read-only results page (in Russian) for the party ballot box. All data lives in
 - **`!` before the position** flips it for the topic's count (for ↔ against). The feed still
   shows the guest's original position.
 - **Feed numbering** (`#1, #2…`) follows time order, not file order.
+- **`Испорченные бюллетени: 4`** adds a protocol line with the number of spoiled ballots.
 - **`---`** separates real data (above) from example data (below). Delete the example part
   whenever you like.
 - Lines that can't be read show up in a red box at the bottom of the page.
