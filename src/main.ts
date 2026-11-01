@@ -14,7 +14,8 @@ type Ballot = {
 }
 type Topic = { name: string; num: number; ballots: Ballot[] }
 type BadLine = { lineNo: number; line: string }
-type Part = { notes: string[]; spoiled: number; ballots: Ballot[]; topics: Topic[] }
+type Stat = [label: string, value: string]
+type Part = { notes: string[]; spoiled: number; stats: Stat[]; ballots: Ballot[]; topics: Topic[] }
 
 const VOTE: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержался(-ась)' }
 const TALLY: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержались' }
@@ -54,7 +55,7 @@ function parseBallot(line: string): Ballot | null {
 }
 
 function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
-  const part: Part = { notes: [], spoiled: 0, ballots: [], topics: [] }
+  const part: Part = { notes: [], spoiled: 0, stats: [], ballots: [], topics: [] }
   let topic: Topic | undefined
 
   lines.forEach((raw, i) => {
@@ -68,6 +69,11 @@ function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
       const count = line.match(/[:|]\s*(\d+)$/)
       if (!count) return errors.push({ lineNo: offset + i + 1, line })
       part.spoiled = Number(count[1])
+    } else if (line.startsWith('%')) {
+      // "% Label | value": a statistics line entered by hand
+      const stat = shift(line.slice(1))
+      if (!stat || !stat[0] || !stat[1]) return errors.push({ lineNo: offset + i + 1, line })
+      part.stats.push([stat[0], stat[1]])
     } else if (line.startsWith('>')) {
       part.notes.push(line.replace(/^>\s*/, ''))
     } else {
@@ -138,7 +144,7 @@ function ballotsWord(n: number): string {
   return form === 'one' ? 'бюллетень' : form === 'few' ? 'бюллетеня' : 'бюллетеней'
 }
 
-function protocolLine(no: number, label: string, value: number): HTMLElement {
+function protocolLine(no: number, label: string, value: number | string): HTMLElement {
   const li = el('li')
   li.append(el('span', 'label', `${no}. ${label}`), el('span', 'dots'), el('strong', '', String(value)))
   return li
@@ -200,6 +206,35 @@ function renderBallot(b: Ballot): HTMLElement {
   return item
 }
 
+function isShouted(text: string): boolean {
+  const letters = text.match(/\p{L}/gu) ?? []
+  const upper = letters.filter((c) => c !== c.toLowerCase())
+  return letters.length >= 3 && upper.length > letters.length * 0.6
+}
+
+// Computed lines first, hand-entered "%" lines from ballots.md after the hearts line.
+function renderStats(p: Part): HTMLElement {
+  const total = p.ballots.length
+  const forCount = p.ballots.filter((b) => b.position === 'for').length
+  const top = p.topics[0]
+  const shortest = p.ballots.reduce((a, b) => ([...b.text].length < [...a.text].length ? b : a))
+  const lines: Stat[] = [
+    ['Доля голосов «За»', `${Math.round((forCount / total) * 100)}\u00a0% (${forCount} из ${total})`],
+    ...(top ? [[`Вопрос, собравший наибольшее число бюллетеней: «${top.name}»`, String(top.ballots.length)] as Stat] : []),
+    ['Число вопросов, поставленных в единственном экземпляре', String(p.ballots.filter((b) => !b.topic?.num).length)],
+    ['Число бюллетеней, заполненных заглавными буквами', String(p.ballots.filter((b) => isShouted(b.text)).length)],
+    ['Число бюллетеней с графическими знаками симпатии (♡)', String(p.ballots.filter((b) => /♡|❤|<3/.test(b.text)).length)],
+    ...p.stats,
+    ['Самый краткий бюллетень', `«${shortest.text}»`],
+    ['Число восклицательных знаков', String(p.ballots.reduce((n, b) => n + (b.text.match(/!/g)?.length ?? 0), 0))],
+  ]
+  const section = el('section', 'stats')
+  const list = el('ol', 'protocol')
+  list.append(...lines.map(([label, value], i) => protocolLine(i + 1, label, value)))
+  section.append(el('h2', '', 'Статистические сведения'), list)
+  return section
+}
+
 function renderPart(p: Part, emptyText: string): HTMLElement[] {
   const protocol = el('ol', 'protocol')
   protocol.append(
@@ -214,6 +249,7 @@ function renderPart(p: Part, emptyText: string): HTMLElement[] {
     section.append(el('h2', '', 'Итоги волеизъявления по вопросам'), ...p.topics.map(renderQuestion))
     out.push(section)
   }
+  if (p.ballots.length) out.push(renderStats(p))
 
   const registry = el('section', 'registry')
   registry.append(el('h2', '', 'Реестр бюллетеней'))
