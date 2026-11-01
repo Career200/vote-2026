@@ -235,26 +235,6 @@ function renderStats(p: Part): HTMLElement {
   return section
 }
 
-const VISIBLE_BALLOTS = 3
-
-// Hides all but the first VISIBLE_BALLOTS items behind a toggle button.
-function collapse(list: HTMLElement, total: number): HTMLElement {
-  const button = el('button', 'show-all')
-  button.type = 'button'
-  const update = (open: boolean) => {
-    list.classList.toggle('collapsed', !open)
-    button.textContent = open ? 'Свернуть реестр' : `Показать все бюллетени (${total})`
-    button.setAttribute('aria-expanded', String(open))
-  }
-  button.addEventListener('click', () => {
-    const open = list.classList.contains('collapsed')
-    update(open)
-    if (!open) list.scrollIntoView({ block: 'start' })
-  })
-  update(false)
-  return button
-}
-
 function renderPart(p: Part, emptyText: string): HTMLElement[] {
   const protocol = el('ol', 'protocol')
   protocol.append(
@@ -277,7 +257,6 @@ function renderPart(p: Part, emptyText: string): HTMLElement[] {
     const list = el('ol')
     list.append(...p.ballots.map(renderBallot))
     registry.append(list)
-    if (p.ballots.length > VISIBLE_BALLOTS) registry.append(collapse(list, p.ballots.length))
   } else {
     registry.append(el('p', 'empty', emptyText))
   }

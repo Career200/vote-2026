@@ -241,21 +241,3 @@ h3 { font-size: 1.05rem; margin: 0 0 10px; line-height: 1.3; }
 }
 .notice-stamps { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
 .notice-stamps .stamp { font-size: 0.95rem; }
-
-/* Collapsible registry */
-
-.registry ol.collapsed > li:nth-child(n + 4) { display: none; }
-.show-all {
-  display: block;
-  margin: 14px auto 0;
-  padding: 8px 18px;
-  border: 1px solid var(--ink);
-  background: transparent;
-  color: var(--ink);
-  font: 700 0.85rem 'PT Serif', Georgia, serif;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.show-all:hover { background: var(--ink); color: var(--paper); }
-.show-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
