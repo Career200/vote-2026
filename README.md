@@ -11,6 +11,8 @@ Read-only results page (in Russian) for the party ballot box. All data lives in
 > Notice shown in an «Информационное сообщение» box (any number of `>` lines).
 > ! A line starting with `!` becomes a violet stamp under the notice.
 
+> # Title of a second notice (a blank line separates notices; `> #` sets the title)
+
 21:40 | за | A ballot that belongs to no topic
 
 ## Topic name, in your own words
@@ -22,7 +24,11 @@ Read-only results page (in Russian) for the party ballot box. All data lives in
 (everything below this line is shown as an example, under a dashed divider)
 ```
 
-- **Ballot line:** `HH:mm | position | text`.
+- **Ballot line:** `[DD.MM ]HH:mm | position | text`.
+  - A date after 31.10 (e.g. `7.11 22:15`) marks a ballot that arrived by astral mail: it is
+    counted in a separate protocol line, shows its date and a «Поступил астральной почтой» note,
+    and is merged into topics and statistics like any other. Use the date the party started;
+    morning times count as the night after it.
   - Time is required: it orders the feed. Times `00:00`–`11:59` count as after midnight.
   - Position is `за`, `против` or `возд` (also `for`, `against`, `abstain` or `+`, `-`, `0`).
   - Text is kept verbatim, `|` included.

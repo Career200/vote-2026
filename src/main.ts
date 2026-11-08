@@ -6,6 +6,8 @@ type Position = 'for' | 'against' | 'abstain'
 type Ballot = {
   n: number
   time: string
+  date?: string
+  mail: boolean
   sortKey: number
   position: Position
   flip: boolean
@@ -15,7 +17,7 @@ type Ballot = {
 type Topic = { name: string; num: number; ballots: Ballot[] }
 type BadLine = { lineNo: number; line: string }
 type Stat = [label: string, value: string]
-type Part = { notes: string[]; spoiled: number; stats: Stat[]; ballots: Ballot[]; topics: Topic[] }
+type Part = { notes: string[][]; spoiled: number; stats: Stat[]; ballots: Ballot[]; topics: Topic[] }
 
 const VOTE: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержался(-ась)' }
 const TALLY: Record<Position, string> = { for: 'За', against: 'Против', abstain: 'Воздержались' }
@@ -37,11 +39,24 @@ function shift(s: string): [string, string] | null {
   return i === -1 ? null : [s.slice(0, i).trim(), s.slice(i + 1).trim()]
 }
 
-// "HH:mm | [!]position | text". Morning times count as after midnight.
+const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+const FIRST_DAY = Date.UTC(2026, 9, 31)
+
+function calendarDate(daysAfterFirst: number): string {
+  const d = new Date(FIRST_DAY + daysAfterFirst * 86_400_000)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+}
+
+// "[DD.MM ]HH:mm | [!]position | text". Morning times count as after midnight.
+// A date after 31.10 marks a ballot that arrived by astral mail.
 function parseBallot(line: string): Ballot | null {
   const a = shift(line.replace(/^[-*]\s+(?=\d)/, ''))
-  const time = a?.[0].match(/^(\d{1,2}):(\d{2})$/)
-  if (!a || !time) return null
+  const when = a?.[0].match(/^(?:(\d{1,2})\.(\d{1,2})\s+)?(\d{1,2}):(\d{2})$/)
+  if (!a || !when) return null
+  const [, day, month] = when
+  const time = [when[0], when[3], when[4]]
+  const days = day ? Math.round((Date.UTC(2026, Number(month) - 1, Number(day)) - FIRST_DAY) / 86_400_000) : 0
+  if (days < 0 || (day && !MONTHS[Number(month) - 1])) return null
   const b = shift(a[1])
   if (!b || !b[1]) return null
   const flip = b[0].startsWith('!')
@@ -50,16 +65,29 @@ function parseBallot(line: string): Ballot | null {
   const h = Number(time[1])
   const m = Number(time[2])
   if (h > 23 || m > 59) return null
-  const sortKey = (h < 12 ? h + 24 : h) * 60 + m
-  return { n: 0, time: `${String(h).padStart(2, '0')}:${time[2]}`, sortKey, position, flip, text: b[1] }
+  const sortKey = days * 1440 + (h < 12 ? h + 24 : h) * 60 + m
+  return {
+    n: 0,
+    time: `${String(h).padStart(2, '0')}:${time[2]}`,
+    date: days > 0 ? calendarDate(days + (h < 12 ? 1 : 0)) : undefined,
+    mail: days > 0,
+    sortKey,
+    position,
+    flip,
+    text: b[1],
+  }
 }
 
 function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
   const part: Part = { notes: [], spoiled: 0, stats: [], ballots: [], topics: [] }
   let topic: Topic | undefined
+  let inNote = false
 
   lines.forEach((raw, i) => {
     const line = raw.trim()
+    // Consecutive ">" lines form one notice; a blank line starts the next one.
+    const continuesNote = inNote
+    inNote = line.startsWith('>')
     if (!line || line.startsWith('# ')) return
     if (line.startsWith('## ')) {
       topic = { name: line.slice(3).trim(), num: 0, ballots: [] }
@@ -75,7 +103,8 @@ function parsePart(lines: string[], offset: number, errors: BadLine[]): Part {
       if (!stat || !stat[0] || !stat[1]) return errors.push({ lineNo: offset + i + 1, line })
       part.stats.push([stat[0], stat[1]])
     } else if (line.startsWith('>')) {
-      part.notes.push(line.replace(/^>\s*/, ''))
+      if (!continuesNote) part.notes.push([])
+      part.notes[part.notes.length - 1].push(line.replace(/^>\s*/, ''))
     } else {
       const ballot = parseBallot(line)
       if (!ballot) return errors.push({ lineNo: offset + i + 1, line })
@@ -194,8 +223,13 @@ function renderQuestion(t: Topic): HTMLElement {
 function renderBallot(b: Ballot): HTMLElement {
   const item = el('li', 'ballot')
   const meta = el('div', 'meta')
-  meta.append(el('span', 'num', `Бюллетень № ${b.n}`), el('span', 'time', b.time), el('span', `vote ${b.position}`, VOTE[b.position]))
+  meta.append(
+    el('span', 'num', `Бюллетень № ${b.n}`),
+    el('span', 'time', b.date ? `${b.date}, ${b.time}` : b.time),
+    el('span', `vote ${b.position}`, VOTE[b.position]),
+  )
   item.append(meta, el('p', 'text', b.text))
+  if (b.mail) item.append(el('p', 'tag', '✉ Поступил астральной почтой'))
   // Only topics that made it into a question card get a reference.
   if (b.topic && b.topic.num) {
     const ref = b.flip
@@ -236,12 +270,18 @@ function renderStats(p: Part): HTMLElement {
 }
 
 function renderPart(p: Part, emptyText: string): HTMLElement[] {
+  const mail = p.ballots.filter((b) => b.mail).length
+  const lines: [string, number][] = [
+    ['Число бюллетеней, извлечённых из переносного ящика для голосования', p.ballots.length - mail],
+  ]
+  if (mail) {
+    lines.push(['Число бюллетеней, поступивших астральной почтой', mail])
+    lines.push(['Всего бюллетеней, принятых к учёту', p.ballots.length])
+  }
+  if (p.spoiled) lines.push(['Число испорченных бюллетеней', p.spoiled])
+  lines.push(['Число вопросов, по которым подведены итоги', p.topics.length])
   const protocol = el('ol', 'protocol')
-  protocol.append(
-    protocolLine(1, 'Число бюллетеней, извлечённых из переносного ящика для голосования', p.ballots.length),
-  )
-  if (p.spoiled) protocol.append(protocolLine(2, 'Число испорченных бюллетеней', p.spoiled))
-  protocol.append(protocolLine(p.spoiled ? 3 : 2, 'Число вопросов, по которым подведены итоги', p.topics.length))
+  protocol.append(...lines.map(([label, value], i) => protocolLine(i + 1, label, value)))
   const out: HTMLElement[] = [protocol]
 
   if (p.topics.length) {
@@ -278,12 +318,14 @@ function renderFooter(): HTMLElement {
   return footer
 }
 
-// "> text" lines form the notice; a "> ! text" line becomes a stamp under it.
+// "> text" lines form a notice; "> # Title" overrides its title, "> ! text" becomes a stamp.
 function renderNotice(notes: string[]): HTMLElement {
   const box = el('section', 'notice')
-  box.append(el('p', 'notice-title', 'Информационное сообщение'))
+  const title = notes.find((n) => n.startsWith('#'))
+  box.append(el('p', 'notice-title', title ? title.slice(1).trim() : 'Информационное сообщение'))
   const stamps = el('div', 'notice-stamps')
   for (const note of notes) {
+    if (note.startsWith('#')) continue
     if (note.startsWith('!')) stamps.append(el('span', 'stamp', note.slice(1).trim()))
     else box.append(el('p', '', note))
   }
@@ -321,7 +363,7 @@ function render() {
   })
   app.append(header, el('p', 'as-of', `Сведения по состоянию на ${asOf} (по земному времени)`))
 
-  if (real.notes.length) app.append(renderNotice(real.notes))
+  app.append(...real.notes.map(renderNotice))
   app.append(...renderPart(real, 'Переносной ящик для голосования пока пуст.'), renderFooter(), renderQr())
 
   if (example) {
